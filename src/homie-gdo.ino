@@ -35,19 +35,17 @@ HomieNode IdentifyNode("identify", "identify");
 
 HomieNode TemperatureNode("temperature", "temperature");
 
-enum DoorStates {
-  DOOR_OPEN = -2,
-  DOOR_CLOSING = -1,
-  DOOR_INTERMED = 0,
-  DOOR_OPENING = 1,
-  DOOR_CLOSED = 2
-}
-
 float case_temperature, ambient_temperature;
 int door_status;
 
+String door_status_description;
+
+long lastStatusReadTime, lastTemperatureReportingTime;
+
 static float temp_delta_trigger = 0.5;
-static long forced_reporting_interval = 300000;
+static long door_sensor_read_dwell_time = 100;
+static long temperature_read_dwell_time = 2000;
+static long temperature_reporting_dwell_time = 30000;
 
 int up_value, dn_value;
 int test_up, test_dn, is_up;
@@ -57,9 +55,74 @@ long last_forced_report = 0;
 long last_msg = 0;
 long last_temp_msg = 0;
 
+enum door_state_list {
+  open = 0,
+  closed = 1,
+  opening = 2,
+  closing = 3,
+  stopped = 4
+};
+
+float previousAmbientTempC, previousCaseTempC;
 float currentAmbientTempC, currentCaseTempC;
 
-int door_trigger();
+bool signalStartup(int delayTime){
+  for(int i=0;i<=5;i++){
+    digitalWrite(UP_IND_PIN,HIGH);
+    delay(delayTime);
+    digitalWrite(UP_IND_PIN, LOW);
+    digitalWrite(DN_IND_PIN,HIGH);
+    delay(delayTime);
+    digitalWrite(DN_IND_PIN, LOW);
+  }
+  return true;
+}
+
+float getTemperature(uint8_t sensorIndex) {
+  float temp;
+  do {
+    DS18B20.requestTemperatures();
+    temp = getTempCByIndex(sensorIndex);
+    delay(100);
+  } while (temp > 80.0 || temp < (-100.0));
+  return temp;
+}
+
+float temperature_request(uint8_t sensorIndex) {
+  float myTempC = getTemperature(sensorIndex);
+  myTempC = round(myTempC * 10.0) / 10.0;
+  return myTempC;
+}
+
+bool door_trigger(){
+  if(door_status != 0){
+    digitalWrite(DOOR_TRIG_PIN,HIGH);
+    if(door_status == 1){
+      digitalWrite(UP_IND_PIN, LOW);
+      digitalWrite(DN_IND_PIN, HIGH);
+    }else if(door_status == -1){
+      digitalWrite(DN_IND_PIN, LOW);
+      digitalWrite(UP_IND_PIN, HIGH);
+    }
+    delay(DOOR_TRIG_DELAY_MS);
+    digitalWrite(DOOR_TRIG_PIN, LOW);
+    digitalWrite(DN_IND_PIN,LOW);
+    digitalWrite(UP_IND_PIN,LOW);
+  }
+  return true;
+}
+
+bool triggerHandler(const HomieRange& range, const String& value) {
+  return door_trigger();
+}
+
+bool identifyHandler(const HomieRange& range, const String& value) {
+  return signalStartup(500);
+}
+
+bool statusHandler(const HomieRange& range, const String& value) {
+  return sendStatus(value);
+}
 
 void setupSPIFFS(){
   SPIFFS.begin();
@@ -87,29 +150,43 @@ int getCurrentDoorSensorValues() {
   return up_value + dn_value;
 }
 
-String describeCurrentState(int current_state, int previous_state){
+String enumerateCurrentState(int current_state, int previous_state){
   //we get to this if the new current state is different from the entry state
-  String stateDescription;
+  String myState;
+
   if(previous_state == 1 && current_state == 0){
     //we're in motion towards open
-    stateDescription = "opening";
+    // stateDescription = "opening";
+    myState = "2";
   }else if(previous_state == -1 && current_state == 0){
     //we're in motion towards closed
-    stateDescription = "closing";
+    // stateDescription = "closing";
+    myState = "3";
   }else if(current_state == -1 && previous_state == 0){
-    stateDescription = "open";
+    // stateDescription = "open";
+    myState = "0";
   }else if(current_state == 1 && previous_state == 0){
-    stateDescription = "closed";
+    // stateDescription = "closed";
+    myState = "1";
   }else{
-    stateDescription = "unknown";
+    // stateDescription = "unknown";
+    myState = "4";
   }
-  return stateDescription;
-
+  return myState;
 }
 
 
 bool sendStatus(String value) {
-
+  if(value == "door_state" || value == "") {
+    door_status = enumerateCurrentState(getCurrentDoorSensorValues(), previous_state);
+    DoorNode.setProperty("door_state").send(String(door_status))
+  }
+  if(value == "ambient_temperature" || value == "") {
+    TemperatureNode.setProperty("ambient").send(String(temperature_request(0)));
+  }
+  if(value == "case_temperature" || value == "") {
+    TemperatureNode.setProperty("ambient").send(String(temperature_request(1)));
+  }
 }
 
 void setupHandler() {
@@ -125,12 +202,44 @@ void setup() {
   setupSPIFFS();
 
   Homie_setFirmware(FW_NAME, FW_VERSION);
+
+  DoorNode.advertise("trigger").settable(triggerHandler);
+  IdentifyNode.advertise("node").settable(identifyHandler);
+
+  lastStatusReadTime = 0;
+  lastTemperatureReportingTime = 0;
+
+  previous_state = 0;
+  previousAmbientTempC = 4000.0;
+  previousCaseTempC = 4000.0;
   Homie.setup();
 }
 
+long last_loop;
+
 void loop() {
   Homie.loop();
-  door_status = getCurrentDoorSensorValues();
+  last_loop = millis();
+
+  if(abs(millis() - lastStatusReadTime) >= door_sensor_read_dwell_time) {
+    door_status = enumerateCurrentState(getCurrentDoorSensorValues(), previous_state);
+    lastStatusReadTime = millis();
+    if(door_status.toInt() <= 1) {
+      sendStatus("door_state")
+    }
+  }
+
+  if(abs(millis() - lastTemperatureReadTime) >= temperature_read_dwell_time) {
+    lastTemperatureReadTime = millis();
+    currentAmbientTempC = temperature_request(0);
+    currentCaseTempC = temperature_request(1);
+  }
+
+  if(abs(millis() - lastTemperatureReportingTime) >= temperature_reporting_dwell_time || abs(currentAmbientTempC - previousAmbientTempC) >= temp_delta_trigger) {
+    lastTemperatureReportingTime =  millis();
+    sendStatus("ambient_temperature");
+    sendStatus("case_temperature");
+  }
 
 
 
