@@ -14,6 +14,9 @@
 #define LIGHT_TRIG_PIN      12
 #define DOOR_TRIG_DELAY_MS  500
 
+#define UP_STATE_VAL        -1
+#define DN_STATE_VAL        1
+
 #define HOSTNAME            "garage-main"
 #define OSWATCH_RESET_TIME  30
 
@@ -31,6 +34,14 @@ HomieNode InfoNode("info", "status");
 HomieNode IdentifyNode("identify", "identify");
 
 HomieNode TemperatureNode("temperature", "temperature");
+
+enum DoorStates {
+  DOOR_OPEN = -2,
+  DOOR_CLOSING = -1,
+  DOOR_INTERMED = 0,
+  DOOR_OPENING = 1,
+  DOOR_CLOSED = 2
+}
 
 float case_temperature, ambient_temperature;
 int door_status;
@@ -68,42 +79,37 @@ void setupSPIFFS(){
   }
 }
 
-int getCurrentDoorStatus() {
-  up_value = digitalRead(UP_SENSE_PIN);
+int getCurrentDoorSensorValues() {
+  up_value = digitalRead(UP_SENSE_PIN) * (-1);
   dn_value = digitalRead(DN_SENSE_PIN);
-
-  //current status == 1 if door is open, -1 if door is closed
-  int current_status;
-  current_status = up_value - dn_value;
-  if(current_status == 1 && current_status > door_status) {
-    //should be going from opening to open
-
-  }else if(current_status == 0 && current_status < door_status) {
-    //should be going from open to closing
-
-  }else if(current_status == 0 && current_status > door_status) {
-    //should be going from closed to opening
-
-  }else if(current_status == -1 && current_status < door_status) {
-    //should be going from closing to closed
-
-  }else{
-    //current status is unchanged from existing status
-
-  }
-
-  digitalWrite(UP_IND_PIN, up_value);
-  digitalWrite(DN_IND_PIN, dn_value);
-  if(current_status != door_status){
-
-  }
+  digitalWrite(UP_IND_PIN, up_value * -1);
+  digitalWrite(DN_IND_PIN, dn_value * 1);
+  return up_value + dn_value;
 }
 
-bool sendStatus(String value) {
-  if(value == "door_state" || value == "") {
-    // String doorState = is_up ? ""
-    // DoorNode.setProperty("state").send
+String describeCurrentState(int current_state, int previous_state){
+  //we get to this if the new current state is different from the entry state
+  String stateDescription;
+  if(previous_state == 1 && current_state == 0){
+    //we're in motion towards open
+    stateDescription = "opening";
+  }else if(previous_state == -1 && current_state == 0){
+    //we're in motion towards closed
+    stateDescription = "closing";
+  }else if(current_state == -1 && previous_state == 0){
+    stateDescription = "open";
+  }else if(current_state == 1 && previous_state == 0){
+    stateDescription = "closed";
+  }else{
+    stateDescription = "unknown";
   }
+  return stateDescription;
+
+}
+
+
+bool sendStatus(String value) {
+
 }
 
 void setupHandler() {
@@ -124,4 +130,8 @@ void setup() {
 
 void loop() {
   Homie.loop();
+  door_status = getCurrentDoorSensorValues();
+
+
+
 }

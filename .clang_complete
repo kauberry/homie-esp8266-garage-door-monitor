@@ -13,8 +13,8 @@
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266HTTPClient/src
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/Ticker
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266mDNS
--I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266WebServer/src
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/DNSServer/src
+-I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266WebServer/src
 -I/Users/kauberry/Documents/homie-gdo/.piolibdeps/Homie/src
 -I/Users/kauberry/Documents/homie-gdo/src
 -I/Users/kauberry/Documents/homie-gdo/.piolibdeps/ArduinoJson_ID64/src
@@ -37,8 +37,8 @@
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266HTTPClient/src
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/Ticker
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266mDNS
--I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266WebServer/src
 -I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/DNSServer/src
+-I/Users/kauberry/.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266WebServer/src
 -I/Users/kauberry/Documents/homie-gdo/.piolibdeps/Homie/src
 -I/Users/kauberry/.platformio/lib/Adafruit_BME280_ID166
 -I/Users/kauberry/.platformio/lib/Adafruit_GFX_ID13
